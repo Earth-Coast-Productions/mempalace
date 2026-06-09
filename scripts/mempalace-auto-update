@@ -21,37 +21,10 @@ if ! [ -x "$VENV/bin/pip" ]; then
 fi
 
 apply_patches() {
-    # Reapply every patch in $PATCHES_DIR. Patches are tracked in the
-    # earthcoast/mempalace repo and document upstream incompatibilities
-    # that haven't shipped fixes yet. A patch that fails to apply (e.g.
-    # because upstream merged the fix) aborts the update so it can be
-    # retired manually — silently skipping would mean the deployment
-    # state stops matching the repo without anyone noticing.
-    [ -d "$PATCHES_DIR" ] || { echo "No patches dir at $PATCHES_DIR — skipping"; return 0; }
-    shopt -s nullglob
-    local applied=0
-    local skipped=0
-    for patch in "$PATCHES_DIR"/*.patch; do
-        local name
-        name=$(basename "$patch")
-        # Already applied? (reverse-patch dry-run succeeds) — skip silently.
-        if patch -p1 -d "$SITE_PKGS" -R --dry-run < "$patch" >/dev/null 2>&1; then
-            echo "Skipping $name — already applied."
-            skipped=$((skipped + 1))
-            continue
-        fi
-        # Forward dry-run failure means the patch is broken — upstream likely
-        # merged the fix or refactored the target. Abort so it gets retired manually.
-        if ! patch -p1 -d "$SITE_PKGS" --dry-run < "$patch" >/dev/null 2>&1; then
-            echo "ERROR: patch $name does not apply cleanly to mempalace $LATEST."
-            echo "Likely upstream merged the fix or refactored the target. Inspect and retire the patch."
-            return 1
-        fi
-        echo "Applying patch: $name"
-        patch -p1 -d "$SITE_PKGS" < "$patch"
-        applied=$((applied + 1))
-    done
-    echo "Patches: $applied applied, $skipped already-present."
+    # Delegate to the standalone reapply script — single source of truth,
+    # also wired as mempalace.service ExecStartPre so a manual restart can't
+    # resurrect an unpatched server. See /usr/local/bin/mempalace-apply-patches.
+    PATCHES_DIR="$PATCHES_DIR" /usr/local/bin/mempalace-apply-patches
 }
 
 CURRENT=$("$VENV/bin/pip" show mempalace 2>/dev/null | awk '/^Version:/ {print $2}')

@@ -35,8 +35,10 @@ Live `/etc/` is the runtime source of truth. To deploy a tracked config change f
 # After editing the file here:
 sudo cp systemd/mempalace.service /etc/systemd/system/mempalace.service
 sudo cp caddy/Caddyfile /etc/caddy/Caddyfile
+sudo cp scripts/mempalace-apply-patches /usr/local/bin/mempalace-apply-patches
 sudo cp scripts/mempalace-auto-update /usr/local/bin/mempalace-auto-update
 sudo cp configs/etc/cron.d/mempalace-auto-update /etc/cron.d/mempalace-auto-update
+sudo chmod +x /usr/local/bin/mempalace-apply-patches /usr/local/bin/mempalace-auto-update
 sudo systemctl daemon-reload
 sudo systemctl restart mempalace caddy        # warn fleet before restarting mempalace
 ```
@@ -46,6 +48,7 @@ Drift check:
 ```bash
 diff -q systemd/mempalace.service /etc/systemd/system/mempalace.service
 diff -q caddy/Caddyfile /etc/caddy/Caddyfile
+diff -q scripts/mempalace-apply-patches /usr/local/bin/mempalace-apply-patches
 diff -q scripts/mempalace-auto-update /usr/local/bin/mempalace-auto-update
 diff -q configs/etc/cron.d/mempalace-auto-update /etc/cron.d/mempalace-auto-update
 ```
@@ -56,7 +59,7 @@ Restarting `mempalace.service` breaks long-lived MCP sessions on every other VM 
 
 ## Adding a patch
 
-Patches in `patches/` are unified diffs applied on top of each pip-installed mempalace version after `pip install --upgrade`. The auto-update script:
+Patches in `patches/` are unified diffs applied on top of each pip-installed mempalace version. Reapplication lives in one place — `scripts/mempalace-apply-patches` (installed to `/usr/local/bin/`) — with two callers: the auto-update script after each `pip install --upgrade`, and the `mempalace.service` `ExecStartPre` (`+`-prefixed, runs as root) so **every** service start reapplies first. That closes the gap where a manual restart after a stray `pip` reinstall could start an unpatched server — a non-zero exit from the reapply aborts startup on purpose (service-down is recoverable; an unpatched server bricks every client that connects). The reapply:
 
 1. Skips patches whose reverse-patch dry-run succeeds (already applied — idempotent).
 2. Aborts if a patch no longer applies cleanly (likely upstream merged the fix or refactored the target — retire it manually).

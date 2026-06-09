@@ -1,0 +1,53 @@
+#!/usr/bin/env bash
+# /usr/local/bin/mempalace-apply-patches
+# Idempotently reapply every local patch in $PATCHES_DIR on top of the
+# pip-installed mempalace package.
+#
+# Single source of truth for patch reapplication. Two callers:
+#   1. mempalace.service  — ExecStartPre (runs as root via the '+' prefix),
+#      so the running server is ALWAYS patched no matter how it was started.
+#      A non-zero exit here aborts service startup ON PURPOSE: a server that
+#      won't start is safe (clients get a clean connection error), whereas a
+#      server started UNPATCHED bricks every client that connects — its tool
+#      schema carries a top-level anyOf the Anthropic Messages API rejects
+#      (HTTP 400), and the client can't recover without a new session.
+#   2. mempalace-auto-update — after each pip upgrade.
+#
+# Exit codes: 0 = all patches applied or already-present (or no patches dir).
+#             1 = a patch no longer applies cleanly (upstream likely merged
+#                 the fix or refactored the target — retire it manually).
+
+set -euo pipefail
+
+VENV=/opt/mempalace/venv
+PATCHES_DIR="${PATCHES_DIR:-/root/mempalace/patches}"
+SITE_PKGS="$VENV/lib/python3.12/site-packages/mempalace"
+
+ts() { date -Is; }
+
+[ -d "$PATCHES_DIR" ] || { echo "$(ts) mempalace-apply-patches: no patches dir at $PATCHES_DIR — nothing to do"; exit 0; }
+[ -d "$SITE_PKGS" ]   || { echo "$(ts) mempalace-apply-patches: ERROR site-packages missing at $SITE_PKGS"; exit 1; }
+
+shopt -s nullglob
+applied=0
+skipped=0
+for patch in "$PATCHES_DIR"/*.patch; do
+    name=$(basename "$patch")
+    # Already applied? (reverse-patch dry-run succeeds) — skip silently.
+    if patch -p1 -d "$SITE_PKGS" -R --dry-run < "$patch" >/dev/null 2>&1; then
+        echo "$(ts) mempalace-apply-patches: skip $name — already applied"
+        skipped=$((skipped + 1))
+        continue
+    fi
+    # Forward dry-run failure means the patch is broken — upstream likely
+    # merged the fix or refactored the target. Abort so it gets retired manually.
+    if ! patch -p1 -d "$SITE_PKGS" --dry-run < "$patch" >/dev/null 2>&1; then
+        echo "$(ts) mempalace-apply-patches: ERROR $name does not apply cleanly."
+        echo "Likely upstream merged the fix or refactored the target. Inspect and retire the patch."
+        exit 1
+    fi
+    echo "$(ts) mempalace-apply-patches: applying $name"
+    patch -p1 -d "$SITE_PKGS" < "$patch"
+    applied=$((applied + 1))
+done
+echo "$(ts) mempalace-apply-patches: $applied applied, $skipped already-present"

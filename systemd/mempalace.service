@@ -6,6 +6,12 @@ After=network.target
 Type=simple
 User=mempalace
 WorkingDirectory=/opt/mempalace/data
+# Reapply local patches before every start (runs as root via '+', regardless
+# of User=). Guarantees the server is never started unpatched — an unpatched
+# diary_write ships a top-level anyOf that the Anthropic Messages API rejects
+# (HTTP 400), bricking every client that connects. A non-zero exit aborts
+# startup on purpose: service-down is recoverable, brick-on-connect is not.
+ExecStartPre=+/usr/local/bin/mempalace-apply-patches
 ExecStart=/opt/mempalace/venv/bin/mcp-proxy \
     --host=127.0.0.1 \
     --port=8112 \
