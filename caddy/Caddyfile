@@ -1,0 +1,28 @@
+{
+	admin off
+	auto_https off
+}
+
+# MemPalace MCP SSE endpoint — public LAN bind.
+# Caddy intercepts OAuth-discovery probes from Claude Code's MCP SDK
+# (which expects JSON error bodies on the well-known + /register paths
+# but mcp-proxy 0.11 returns plain-text 404 "Not Found"), then forwards
+# everything else to mcp-proxy on the loopback.
+#
+# Without this shim, Claude Code's MCP client interprets the plain-text
+# 404 as an OAuth auth failure and refuses to fetch tools after reconnect.
+http://192.168.33.10:8111 {
+	@oauth_probe {
+		path /.well-known/oauth-authorization-server*
+		path /.well-known/oauth-protected-resource*
+		path /.well-known/openid-configuration*
+		path /sse/.well-known/openid-configuration
+		path /register
+	}
+	header @oauth_probe Content-Type application/json
+	respond @oauth_probe `{"error":"not_found","error_description":"no OAuth metadata"}` 404
+
+	reverse_proxy 127.0.0.1:8112 {
+		flush_interval -1
+	}
+}

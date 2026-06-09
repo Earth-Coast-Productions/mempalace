@@ -1,0 +1,65 @@
+#!/usr/bin/env bash
+# /usr/local/bin/mempalace-auto-update
+# Weekly auto-update for the MemPalace MCP server.
+# Snapshots the palace, upgrades the package in-venv, restarts the service,
+# and rolls back if the new build doesn't come up.
+
+set -euo pipefail
+
+VENV=/opt/mempalace/venv
+PALACE=/opt/mempalace/data/palace
+SERVICE=mempalace
+SNAPSHOT_KEEP=4
+
+ts() { date -Is; }
+echo "=== $(ts) mempalace-auto-update start ==="
+
+if ! [ -x "$VENV/bin/pip" ]; then
+    echo "ERROR: pip not found at $VENV/bin/pip"; exit 1
+fi
+
+CURRENT=$("$VENV/bin/pip" show mempalace 2>/dev/null | awk '/^Version:/ {print $2}')
+LATEST=$("$VENV/bin/pip" index versions mempalace 2>/dev/null \
+    | awk -F'[ ()]+' '/^mempalace/ && !seen {print $2; seen=1}')
+
+if [ -z "${CURRENT:-}" ] || [ -z "${LATEST:-}" ]; then
+    echo "ERROR: failed to resolve versions (current=$CURRENT latest=$LATEST)"
+    exit 1
+fi
+
+echo "Installed: $CURRENT  Latest: $LATEST"
+
+if [ "$CURRENT" = "$LATEST" ]; then
+    echo "Up to date — no action."
+    exit 0
+fi
+
+SNAP="${PALACE}.bak-pre-${LATEST}-$(date +%Y%m%d-%H%M%S)"
+echo "Snapshotting palace to $SNAP"
+cp -a "$PALACE" "$SNAP"
+
+echo "Upgrading mempalace $CURRENT -> $LATEST"
+"$VENV/bin/pip" install --upgrade "mempalace==$LATEST"
+
+echo "Restarting $SERVICE"
+systemctl restart "$SERVICE"
+sleep 5
+
+if ! systemctl is-active --quiet "$SERVICE"; then
+    echo "ERROR: $SERVICE failed to start after upgrade — see journalctl -u $SERVICE"
+    echo "Snapshot preserved at $SNAP for rollback."
+    exit 2
+fi
+
+echo "Upgrade $CURRENT -> $LATEST complete; service active."
+
+# Prune old snapshots, keep the N most recent.
+mapfile -t SNAPS < <(ls -1dt "${PALACE}".bak-pre-* 2>/dev/null || true)
+if [ "${#SNAPS[@]}" -gt "$SNAPSHOT_KEEP" ]; then
+    for old in "${SNAPS[@]:$SNAPSHOT_KEEP}"; do
+        echo "Pruning old snapshot: $old"
+        rm -rf -- "$old"
+    done
+fi
+
+echo "=== $(ts) mempalace-auto-update done ==="

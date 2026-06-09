@@ -1,0 +1,20 @@
+[Unit]
+Description=MemPalace MCP Server (SSE via mcp-proxy)
+After=network.target
+
+[Service]
+Type=simple
+User=mempalace
+WorkingDirectory=/opt/mempalace/data
+ExecStart=/opt/mempalace/venv/bin/mcp-proxy \
+    --host=127.0.0.1 \
+    --port=8112 \
+    --pass-environment \
+    -- /opt/mempalace/venv/bin/python -m mempalace.mcp_server \
+       --palace /opt/mempalace/data/palace
+Restart=on-failure
+RestartSec=5
+Environment=HOME=/opt/mempalace
+
+[Install]
+WantedBy=multi-user.target
