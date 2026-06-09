@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # /usr/local/bin/mempalace-auto-update
 # Weekly auto-update for the MemPalace MCP server.
-# Snapshots the palace, upgrades the package in-venv, restarts the service,
-# and rolls back if the new build doesn't come up.
+# Snapshots the palace, upgrades the package in-venv, applies local patches,
+# restarts the service, and rolls back if the new build doesn't come up.
 
 set -euo pipefail
 
@@ -10,6 +10,8 @@ VENV=/opt/mempalace/venv
 PALACE=/opt/mempalace/data/palace
 SERVICE=mempalace
 SNAPSHOT_KEEP=4
+PATCHES_DIR=/root/mempalace/patches
+SITE_PKGS="$VENV/lib/python3.12/site-packages/mempalace"
 
 ts() { date -Is; }
 echo "=== $(ts) mempalace-auto-update start ==="
@@ -17,6 +19,40 @@ echo "=== $(ts) mempalace-auto-update start ==="
 if ! [ -x "$VENV/bin/pip" ]; then
     echo "ERROR: pip not found at $VENV/bin/pip"; exit 1
 fi
+
+apply_patches() {
+    # Reapply every patch in $PATCHES_DIR. Patches are tracked in the
+    # earthcoast/mempalace repo and document upstream incompatibilities
+    # that haven't shipped fixes yet. A patch that fails to apply (e.g.
+    # because upstream merged the fix) aborts the update so it can be
+    # retired manually — silently skipping would mean the deployment
+    # state stops matching the repo without anyone noticing.
+    [ -d "$PATCHES_DIR" ] || { echo "No patches dir at $PATCHES_DIR — skipping"; return 0; }
+    shopt -s nullglob
+    local applied=0
+    local skipped=0
+    for patch in "$PATCHES_DIR"/*.patch; do
+        local name
+        name=$(basename "$patch")
+        # Already applied? (reverse-patch dry-run succeeds) — skip silently.
+        if patch -p1 -d "$SITE_PKGS" -R --dry-run < "$patch" >/dev/null 2>&1; then
+            echo "Skipping $name — already applied."
+            skipped=$((skipped + 1))
+            continue
+        fi
+        # Forward dry-run failure means the patch is broken — upstream likely
+        # merged the fix or refactored the target. Abort so it gets retired manually.
+        if ! patch -p1 -d "$SITE_PKGS" --dry-run < "$patch" >/dev/null 2>&1; then
+            echo "ERROR: patch $name does not apply cleanly to mempalace $LATEST."
+            echo "Likely upstream merged the fix or refactored the target. Inspect and retire the patch."
+            return 1
+        fi
+        echo "Applying patch: $name"
+        patch -p1 -d "$SITE_PKGS" < "$patch"
+        applied=$((applied + 1))
+    done
+    echo "Patches: $applied applied, $skipped already-present."
+}
 
 CURRENT=$("$VENV/bin/pip" show mempalace 2>/dev/null | awk '/^Version:/ {print $2}')
 LATEST=$("$VENV/bin/pip" index versions mempalace 2>/dev/null \
@@ -30,7 +66,12 @@ fi
 echo "Installed: $CURRENT  Latest: $LATEST"
 
 if [ "$CURRENT" = "$LATEST" ]; then
-    echo "Up to date — no action."
+    echo "Up to date — no upgrade. Reapplying patches in case site-packages was touched."
+    if ! apply_patches; then
+        echo "ERROR: patch reapply failed on same-version run. Aborting."
+        exit 4
+    fi
+    echo "=== $(ts) mempalace-auto-update done ==="
     exit 0
 fi
 
@@ -40,6 +81,12 @@ cp -a "$PALACE" "$SNAP"
 
 echo "Upgrading mempalace $CURRENT -> $LATEST"
 "$VENV/bin/pip" install --upgrade "mempalace==$LATEST"
+
+if ! apply_patches; then
+    echo "ERROR: patches do not apply to $LATEST. Service NOT restarted."
+    echo "Snapshot preserved at $SNAP. Investigate before next run."
+    exit 3
+fi
 
 echo "Restarting $SERVICE"
 systemctl restart "$SERVICE"

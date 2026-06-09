@@ -79,9 +79,43 @@ diff -q scripts/mempalace-auto-update /usr/local/bin/mempalace-auto-update
 
 ## Auto-update
 
-`scripts/mempalace-auto-update` runs Sunday 04:00 UTC via `/etc/cron.d/mempalace-auto-update` (tracked in the `ecp-server` repo). It snapshots `/opt/mempalace/data/palace`, runs `pip install --upgrade mempalace`, restarts the service, and rolls back on health-check failure. Keeps the 4 most recent snapshots.
+`scripts/mempalace-auto-update` runs Sunday 04:00 UTC via `/etc/cron.d/mempalace-auto-update` (tracked in the `ecp-server` repo). It snapshots `/opt/mempalace/data/palace`, runs `pip install --upgrade mempalace`, reapplies local patches from `patches/`, restarts the service, and rolls back on health-check failure. Keeps the 4 most recent snapshots.
 
 The cron entry deliberately fires during the lowest-traffic window because each restart breaks long-lived MCP sessions on other VMs (-32602) until clients run `/mcp` to reconnect.
+
+## Local patches
+
+`patches/` holds unified diffs applied on top of each pip-installed mempalace version. Each patch documents an upstream incompatibility that hasn't shipped a fix yet. The auto-update script:
+
+1. Skips patches already applied (reverse-patch dry-run).
+2. Aborts if a patch no longer applies cleanly (likely upstream merged the fix or refactored the target — retire the patch manually).
+3. Applies the rest in lexical order, then restarts the service.
+
+Current patches:
+
+| Patch | Target | Reason |
+|---|---|---|
+| `0001-diary_write-remove-toplevel-anyOf.patch` | `mcp_server.py` | Anthropic's Messages API rejects tools with `oneOf`/`allOf`/`anyOf` at `input_schema` root (HTTP 400). Server already enforces the constraint at handler time. Upstream issue: [Earth-Coast-Productions/mempalace upstream issue link TBD] |
+
+### Adding a patch
+
+```bash
+# 1. Make the local fix in /opt/mempalace/venv/lib/python3.12/site-packages/mempalace/
+# 2. Diff against the pristine wheel:
+mkdir -p /tmp/pristine && cd /tmp/pristine
+/opt/mempalace/venv/bin/pip download --no-deps mempalace==<VERSION> -d .
+unzip -o mempalace-<VERSION>-*.whl 'mempalace/<file>.py'
+diff -u mempalace/<file>.py /opt/mempalace/venv/lib/python3.12/site-packages/mempalace/<file>.py \
+    | sed -E '1s|.*|--- a/<file>.py|; 2s|.*|+++ b/<file>.py|' \
+    > /root/mempalace/patches/NNNN-description.patch
+# 3. Verify it applies cleanly to the pristine + matches live:
+cd /tmp/pristine/mempalace && patch -p1 --dry-run < /root/mempalace/patches/NNNN-*.patch
+# 4. Commit + push.
+```
+
+### Retiring a patch
+
+When upstream merges the fix in version X, the auto-update will halt with "patch does not apply cleanly". Delete the `.patch` file, commit, then re-run the script.
 
 ## Related
 
