@@ -37,7 +37,8 @@ Newer Claude Code MCP SDK probes six OAuth-discovery paths plus `POST /register`
 |---|---|---|
 | `systemd/mempalace.service` | `/etc/systemd/system/mempalace.service` | Runs mcp-proxy bound to localhost:8112 |
 | `caddy/Caddyfile` | `/etc/caddy/Caddyfile` | Public LAN bind on .10:8111, OAuth shim, reverse-proxy to localhost:8112 |
-| `scripts/mempalace-auto-update` | `/usr/local/bin/mempalace-auto-update` | Sunday 04:00 UTC cron entry at `/etc/cron.d/mempalace-auto-update` (lives in `ecp-server` repo) |
+| `scripts/mempalace-auto-update` | `/usr/local/bin/mempalace-auto-update` | Run weekly by the cron entry below |
+| `configs/etc/cron.d/mempalace-auto-update` | `/etc/cron.d/mempalace-auto-update` | Sunday 04:00 UTC trigger for the auto-update |
 
 ## Ops
 
@@ -79,7 +80,7 @@ diff -q scripts/mempalace-auto-update /usr/local/bin/mempalace-auto-update
 
 ## Auto-update
 
-`scripts/mempalace-auto-update` runs Sunday 04:00 UTC via `/etc/cron.d/mempalace-auto-update` (tracked in the `ecp-server` repo). It snapshots `/opt/mempalace/data/palace`, runs `pip install --upgrade mempalace`, reapplies local patches from `patches/`, restarts the service, and rolls back on health-check failure. Keeps the 4 most recent snapshots.
+`scripts/mempalace-auto-update` runs Sunday 04:00 UTC via the cron entry at `configs/etc/cron.d/mempalace-auto-update`. It snapshots `/opt/mempalace/data/palace`, runs `pip install --upgrade mempalace`, reapplies local patches from `patches/`, restarts the service, and rolls back on health-check failure. Keeps the 4 most recent snapshots.
 
 The cron entry deliberately fires during the lowest-traffic window because each restart breaks long-lived MCP sessions on other VMs (-32602) until clients run `/mcp` to reconnect.
 

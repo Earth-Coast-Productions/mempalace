@@ -1,0 +1,4 @@
+# Weekly MemPalace MCP server auto-update.
+# Sundays 04:00 UTC — staggered away from ecp-update-checker (07:30) and
+# nightly backups (00:00).
+0 4 * * 0 root /usr/local/bin/mempalace-auto-update >> /var/log/mempalace-auto-update.log 2>&1
