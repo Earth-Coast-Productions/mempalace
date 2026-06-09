@@ -35,8 +35,9 @@ Newer Claude Code MCP SDK probes six OAuth-discovery paths plus `POST /register`
 
 | Path | Live destination | Notes |
 |---|---|---|
-| `systemd/mempalace.service` | `/etc/systemd/system/mempalace.service` | Runs mcp-proxy bound to localhost:8112 |
+| `systemd/mempalace.service` | `/etc/systemd/system/mempalace.service` | Runs mcp-proxy bound to localhost:8112; `ExecStartPre` reapplies patches before every start |
 | `caddy/Caddyfile` | `/etc/caddy/Caddyfile` | Public LAN bind on .10:8111, OAuth shim, reverse-proxy to localhost:8112 |
+| `scripts/mempalace-apply-patches` | `/usr/local/bin/mempalace-apply-patches` | Idempotent patch reapply — single source of truth; called by the unit's `ExecStartPre` and by the auto-update script |
 | `scripts/mempalace-auto-update` | `/usr/local/bin/mempalace-auto-update` | Run weekly by the cron entry below |
 | `configs/etc/cron.d/mempalace-auto-update` | `/etc/cron.d/mempalace-auto-update` | Sunday 04:00 UTC trigger for the auto-update |
 
@@ -66,6 +67,9 @@ Live `/etc/` is the runtime source of truth; this repo is the declared state. Bo
 # After editing in repo:
 sudo cp systemd/mempalace.service /etc/systemd/system/mempalace.service
 sudo cp caddy/Caddyfile /etc/caddy/Caddyfile
+sudo cp scripts/mempalace-apply-patches /usr/local/bin/mempalace-apply-patches
+sudo cp scripts/mempalace-auto-update /usr/local/bin/mempalace-auto-update
+sudo chmod +x /usr/local/bin/mempalace-apply-patches /usr/local/bin/mempalace-auto-update
 sudo systemctl daemon-reload
 sudo systemctl restart mempalace caddy
 ```
@@ -75,6 +79,7 @@ sudo systemctl restart mempalace caddy
 ```bash
 diff -q systemd/mempalace.service /etc/systemd/system/mempalace.service
 diff -q caddy/Caddyfile /etc/caddy/Caddyfile
+diff -q scripts/mempalace-apply-patches /usr/local/bin/mempalace-apply-patches
 diff -q scripts/mempalace-auto-update /usr/local/bin/mempalace-auto-update
 ```
 
@@ -86,11 +91,11 @@ The cron entry deliberately fires during the lowest-traffic window because each 
 
 ## Local patches
 
-`patches/` holds unified diffs applied on top of each pip-installed mempalace version. Each patch documents an upstream incompatibility that hasn't shipped a fix yet. The auto-update script:
+`patches/` holds unified diffs applied on top of each pip-installed mempalace version. Each patch documents an upstream incompatibility that hasn't shipped a fix yet. Reapplication lives in one place — `scripts/mempalace-apply-patches` — with **two callers**: the `mempalace.service` `ExecStartPre` (so *every* start reapplies first — a manual restart after a stray `pip` reinstall can't bring up an unpatched server) and `mempalace-auto-update` (after each `pip install --upgrade`). The reapply:
 
 1. Skips patches already applied (reverse-patch dry-run).
-2. Aborts if a patch no longer applies cleanly (likely upstream merged the fix or refactored the target — retire the patch manually).
-3. Applies the rest in lexical order, then restarts the service.
+2. Aborts if a patch no longer applies cleanly (likely upstream merged the fix or refactored the target — retire the patch manually). As `ExecStartPre`, a non-zero exit aborts service startup *on purpose* — a service that's down is recoverable, but a server started unpatched bricks every client that connects (the bad `diary_write` schema rides in `tools[]` on every request → HTTP 400 → the client can't even reconnect to pick up a fix; recovery is a brand-new session).
+3. Applies the rest in lexical order.
 
 Current patches:
 

@@ -1,5 +1,10 @@
 # mempalace — open follow-ups
 
+## Done
+
+- [x] **Reapply patches on every service start (ExecStartPre hardening).** 2026-06-09. The unit had no patch-reapply step — patches were only reapplied by the weekly cron, so a manual `pip install` + restart outside that cron would start an *unpatched* server and reintroduce `diary_write`'s top-level `anyOf` (HTTP 400, bricks every connecting client). Factored reapply into `scripts/mempalace-apply-patches` (single source of truth; idempotent), wired it as `mempalace.service` `ExecStartPre=+` (root, fail-closed), and pointed `mempalace-auto-update` at the same script. Activates on next service start.
+- [x] **Audit all mempalace tools for top-level `oneOf`/`allOf`/`anyOf`.** 2026-06-09. Introspected the live stdio server's `tools/list` out-of-band — all 30 tools are clean `type: object`; `diary_write` was the only offender and the patch removes it. Re-run the introspection (not a source grep — the schema is generated) after each upgrade; recipe in `/opt/standards/DEBUGGING.md`.
+
 ## Watching upstream
 
 - [ ] **Retire `patches/0001-diary_write-remove-toplevel-anyOf.patch` when MemPalace/mempalace#1728 merges.** The Sunday auto-update will halt with "patch does not apply cleanly" once upstream's fix lands — that's the trigger. Delete the `.patch` file, commit, re-run the script manually to confirm.
@@ -14,7 +19,7 @@
 
 - [ ] **Add a CI check that dry-runs each patch against the latest pinned mempalace version.** Catches "patch broken by upstream refactor" before the Sunday auto-update halts production.
 
-- [ ] **Audit whether other mempalace tools have top-level `oneOf`/`allOf`/`anyOf`.** Today only `diary_write` was the culprit, but the same JSON Schema pattern could exist elsewhere — the symptom is silent unless an SDK happens to send the request. `grep -rn "anyOf\|oneOf\|allOf" /opt/mempalace/venv/lib/python3.12/site-packages/mempalace/` after each upgrade.
+- [ ] **Re-audit tool schemas for top-level `oneOf`/`allOf`/`anyOf` after each upgrade.** `diary_write` was the only offender in 3.4.0 (see Done above), but a future version could introduce another. The symptom is silent until an SDK sends the request, then it bricks the session — so check proactively via the out-of-band `tools/list` introspection (the schema is generated, so a source grep misses it). Recipe in `/opt/standards/DEBUGGING.md`. Good candidate to fold into the patch-dry-run CI check above.
 
 ## Setup gaps (low priority)
 
