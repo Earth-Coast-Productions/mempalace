@@ -95,7 +95,7 @@ Current patches:
 
 | Patch | Target | Reason |
 |---|---|---|
-| `0001-diary_write-remove-toplevel-anyOf.patch` | `mcp_server.py` | Anthropic's Messages API rejects tools with `oneOf`/`allOf`/`anyOf` at `input_schema` root (HTTP 400). Server already enforces the constraint at handler time. Upstream issue: [Earth-Coast-Productions/mempalace upstream issue link TBD] |
+| `0001-diary_write-remove-toplevel-anyOf.patch` | `mcp_server.py` | Anthropic's Messages API rejects tools with `oneOf`/`allOf`/`anyOf` at `input_schema` root (HTTP 400). Server already enforces the constraint at handler time. Upstream: [MemPalace/mempalace#1728](https://github.com/MemPalace/mempalace/issues/1728) (also [#1711](https://github.com/MemPalace/mempalace/issues/1711)). |
 
 ### Adding a patch
 
