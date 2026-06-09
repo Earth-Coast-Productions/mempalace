@@ -22,7 +22,7 @@ The mempalace package itself is installed from PyPI into a venv at `/opt/mempala
 | Component | Bind | Purpose |
 |---|---|---|
 | Caddy (`/etc/caddy/Caddyfile`) | `192.168.33.10:8111` | OAuth-probe shim + reverse proxy |
-| mcp-proxy (`/opt/mempalace/venv/bin/mcp-proxy`) | `127.0.0.1:8112` | SSE ↔ stdio bridge for the MCP server |
+| mcp-proxy 0.12.0 (`/opt/mempalace/venv/bin/mcp-proxy`) | `127.0.0.1:8112` | SSE ↔ stdio bridge for the MCP server |
 | mempalace server | stdio (child of mcp-proxy) | The actual MCP tool implementation |
 
 Clients connect to `http://192.168.33.10:8111/sse` exactly as before — the shim is transparent to them.
@@ -35,7 +35,7 @@ Newer Claude Code MCP SDK probes six OAuth-discovery paths plus `POST /register`
 
 | Path | Live destination | Notes |
 |---|---|---|
-| `systemd/mempalace.service` | `/etc/systemd/system/mempalace.service` | Runs mcp-proxy bound to localhost:8112; `ExecStartPre` reapplies patches before every start |
+| `systemd/mempalace.service` | `/etc/systemd/system/mempalace.service` | Runs mcp-proxy bound to localhost:8112; `ExecStartPre` reapplies patches before every start; sets `MEMPALACE_MCP_IDLE_HOURS=0` to disable the idle-exit watchdog (see below) |
 | `caddy/Caddyfile` | `/etc/caddy/Caddyfile` | Public LAN bind on .10:8111, OAuth shim, reverse-proxy to localhost:8112 |
 | `scripts/mempalace-apply-patches` | `/usr/local/bin/mempalace-apply-patches` | Idempotent patch reapply — single source of truth; called by the unit's `ExecStartPre` and by the auto-update script |
 | `scripts/mempalace-auto-update` | `/usr/local/bin/mempalace-auto-update` | Run weekly by the cron entry below |
@@ -88,6 +88,10 @@ diff -q scripts/mempalace-auto-update /usr/local/bin/mempalace-auto-update
 `scripts/mempalace-auto-update` runs Sunday 04:00 UTC via the cron entry at `configs/etc/cron.d/mempalace-auto-update`. It snapshots `/opt/mempalace/data/palace`, runs `pip install --upgrade mempalace`, reapplies local patches from `patches/`, restarts the service, and rolls back on health-check failure. Keeps the 4 most recent snapshots.
 
 The cron entry deliberately fires during the lowest-traffic window because each restart breaks long-lived MCP sessions on other VMs (-32602) until clients run `/mcp` to reconnect.
+
+## Why the idle-exit watchdog is disabled
+
+The unit sets `Environment=MEMPALACE_MCP_IDLE_HOURS=0`. mempalace's server has a watchdog (#1552) that exits the process after 8h with no requests, "to release ChromaDB/HNSW file handles" — designed for *ephemeral per-session stdio* servers on Windows that never self-terminate when a Claude Code session ends. This deployment is the opposite: one long-lived Linux service fronted by mcp-proxy. When the child idle-exited, **mcp-proxy did not respawn it**, so the next SSE client got a proxy-handled `initialize` OK but a `tools/list` forwarded to the dead child came back as JSON-RPC `{code:0,""}` — surfacing in Claude Code as *"Reconnected to mempalace, but fetching tools failed: MCP error 0"*. It recurred every 8h-idle window and was only cleared by a manual restart. Disabling the watchdog keeps the child alive for the life of the service. The env var reaches the child because mcp-proxy is launched with `--pass-environment`.
 
 ## Local patches
 

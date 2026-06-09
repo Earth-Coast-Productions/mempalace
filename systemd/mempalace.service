@@ -21,6 +21,15 @@ ExecStart=/opt/mempalace/venv/bin/mcp-proxy \
 Restart=on-failure
 RestartSec=5
 Environment=HOME=/opt/mempalace
+# Disable mempalace's idle-exit watchdog (#1552). That watchdog exists to keep
+# *ephemeral per-session stdio* servers from leaking ChromaDB/HNSW file handles
+# on Windows when a Claude Code session ends. This deployment is the opposite:
+# ONE long-lived Linux service fronted by mcp-proxy. When the child self-exited
+# after 8h idle, mcp-proxy 0.11/0.12 did NOT respawn it, so the next SSE client
+# got a successful (proxy-handled) `initialize` but `tools/list` forwarded to a
+# dead child returned JSON-RPC {code:0,""} — surfacing in clients as
+# "Reconnected to mempalace, but fetching tools failed: MCP error 0". 0 = off.
+Environment=MEMPALACE_MCP_IDLE_HOURS=0
 
 [Install]
 WantedBy=multi-user.target
