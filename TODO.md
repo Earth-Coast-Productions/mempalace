@@ -8,9 +8,11 @@
 
 ## Watching upstream
 
-- [ ] **Retire `patches/0001-diary_write-remove-toplevel-anyOf.patch` when MemPalace/mempalace#1728 merges.** The Sunday auto-update will halt with "patch does not apply cleanly" once upstream's fix lands — that's the trigger. Delete the `.patch` file, commit, re-run the script manually to confirm.
+- [ ] **Retire `patches/0001-diary_write-remove-toplevel-anyOf.patch` when the upstream fix ships.** The Sunday auto-update will halt with "patch does not apply cleanly" once it lands — that's the trigger. Delete the `.patch` file, commit, re-run the script manually to confirm.
+  - **Tracking PR: [MemPalace/mempalace#1735](https://github.com/MemPalace/mempalace/pull/1735)** — open as of 2026-06-10, awaiting code-owner review. Removes the `diary_write` top-level `anyOf`; final commit requires only `agent_name` (not `entry`) to preserve the `content` alias for backward compat. NOT yet in any PyPI release (latest is still 3.4.0), so the patch stays live until a release includes it.
   - Upstream issues: [#1728](https://github.com/MemPalace/mempalace/issues/1728), [#1711](https://github.com/MemPalace/mempalace/issues/1711)
   - The +1 comment with the workaround pattern is at https://github.com/MemPalace/mempalace/issues/1728#issuecomment-4655006361
+  - **Note:** #1735 is the fix for the `anyOf`/HTTP-400 bug *only*. It does NOT address the idle-exit/`MCP error 0` issue fixed 2026-06-09 (that's `MEMPALACE_MCP_IDLE_HOURS=0`, no known upstream PR — arguably an mcp-proxy child-supervision gap, not a mempalace bug).
 
 - [ ] **Watch mcp-proxy for inbound OAuth-discovery handling.** If a future release adds a path-rewriter or canned-response option for the well-known URLs, the Caddy shim could be retired in favor of in-proxy handling. Not blocking; the Caddy layer is small and stable.
 
