@@ -101,11 +101,13 @@ The unit sets `Environment=MEMPALACE_MCP_IDLE_HOURS=0`. mempalace's server has a
 2. Aborts if a patch no longer applies cleanly (likely upstream merged the fix or refactored the target — retire the patch manually). As `ExecStartPre`, a non-zero exit aborts service startup *on purpose* — a service that's down is recoverable, but a server started unpatched bricks every client that connects (the bad `diary_write` schema rides in `tools[]` on every request → HTTP 400 → the client can't even reconnect to pick up a fix; recovery is a brand-new session).
 3. Applies the rest in lexical order.
 
-Current patches:
+Current patches: **none** — the patches directory is empty.
 
-| Patch | Target | Reason |
-|---|---|---|
-| `0001-diary_write-remove-toplevel-anyOf.patch` | `mcp_server.py` | Anthropic's Messages API rejects tools with `oneOf`/`allOf`/`anyOf` at `input_schema` root (HTTP 400). Server already enforces the constraint at handler time. Upstream: [MemPalace/mempalace#1728](https://github.com/MemPalace/mempalace/issues/1728) (also [#1711](https://github.com/MemPalace/mempalace/issues/1711)). |
+Retired:
+
+| Patch | Target | Reason | Retired |
+|---|---|---|---|
+| `0001-diary_write-remove-toplevel-anyOf.patch` | `mcp_server.py` | Anthropic's Messages API rejects tools with `oneOf`/`allOf`/`anyOf` at `input_schema` root (HTTP 400). Server already enforces the constraint at handler time. Upstream: [MemPalace/mempalace#1728](https://github.com/MemPalace/mempalace/issues/1728) (also [#1711](https://github.com/MemPalace/mempalace/issues/1711)). | 2026-06-16 — fix shipped upstream in **mempalace 3.4.1** (release credits PR [#1717](https://github.com/MemPalace/mempalace/pull/1717), the same `diary_write` top-level-`anyOf` removal tracked locally as #1735). Verified 3.4.1's `mcp_server.py` has zero top-level `anyOf`/`oneOf`/`allOf` across all tools. |
 
 ### Adding a patch
 

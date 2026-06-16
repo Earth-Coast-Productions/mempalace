@@ -8,11 +8,9 @@
 
 ## Watching upstream
 
-- [ ] **Retire `patches/0001-diary_write-remove-toplevel-anyOf.patch` when the upstream fix ships.** The Sunday auto-update will halt with "patch does not apply cleanly" once it lands — that's the trigger. Delete the `.patch` file, commit, re-run the script manually to confirm.
-  - **Tracking PR: [MemPalace/mempalace#1735](https://github.com/MemPalace/mempalace/pull/1735)** — open as of 2026-06-10, awaiting code-owner review. Removes the `diary_write` top-level `anyOf`; final commit requires only `agent_name` (not `entry`) to preserve the `content` alias for backward compat. NOT yet in any PyPI release (latest is still 3.4.0), so the patch stays live until a release includes it.
-  - Upstream issues: [#1728](https://github.com/MemPalace/mempalace/issues/1728), [#1711](https://github.com/MemPalace/mempalace/issues/1711)
-  - The +1 comment with the workaround pattern is at https://github.com/MemPalace/mempalace/issues/1728#issuecomment-4655006361
-  - **Note:** #1735 is the fix for the `anyOf`/HTTP-400 bug *only*. It does NOT address the idle-exit/`MCP error 0` issue fixed 2026-06-09 (that's `MEMPALACE_MCP_IDLE_HOURS=0`, no known upstream PR — arguably an mcp-proxy child-supervision gap, not a mempalace bug).
+- [x] **Retire `patches/0001-diary_write-remove-toplevel-anyOf.patch` — upstream fix shipped.** 2026-06-16. Upgraded 3.4.0→3.4.1 (manual, not the Sunday cron). 3.4.1's `mcp_server.py` already drops the `diary_write` top-level `anyOf` — release notes credit PR [#1717](https://github.com/MemPalace/mempalace/pull/1717) ("drop top-level anyOf from diary_write schema"), the same fix the locally-tracked [#1735](https://github.com/MemPalace/mempalace/pull/1735) addressed. Confirmed both forward and reverse patch dry-runs now FAIL (target context changed) and the upgraded source has **zero** top-level `anyOf`/`oneOf`/`allOf` across all tools. Deleted the `.patch` file; the patches dir is now empty (`mempalace-apply-patches` exits 0 cleanly, so `ExecStartPre` and the Sunday cron stay green). Done by hand rather than waiting for the auto-update "patch does not apply cleanly" halt.
+  - Upstream issues (now resolved): [#1728](https://github.com/MemPalace/mempalace/issues/1728), [#1711](https://github.com/MemPalace/mempalace/issues/1711)
+  - **Note:** this fix is for the `anyOf`/HTTP-400 bug *only*. It does NOT address the idle-exit/`MCP error 0` issue fixed 2026-06-09 (that's `MEMPALACE_MCP_IDLE_HOURS=0`, no known upstream PR — arguably an mcp-proxy child-supervision gap, not a mempalace bug).
 
 - [ ] **Watch mcp-proxy for inbound OAuth-discovery handling.** If a future release adds a path-rewriter or canned-response option for the well-known URLs, the Caddy shim could be retired in favor of in-proxy handling. Not blocking; the Caddy layer is small and stable.
 
