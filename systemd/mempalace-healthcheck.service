@@ -1,0 +1,10 @@
+[Unit]
+Description=MemPalace healthcheck + self-heal (real MCP handshake via :8111)
+After=mempalace.service caddy.service network-online.target
+
+[Service]
+Type=oneshot
+TimeoutStartSec=120
+# Reuse the fleet Discord webhook if present (optional); syslog alerts always.
+EnvironmentFile=-/etc/ecp/cc-watchdog.env
+ExecStart=/usr/local/bin/mempalace-healthcheck

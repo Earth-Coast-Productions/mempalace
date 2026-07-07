@@ -14,7 +14,7 @@
 
 - [ ] **Watch mcp-proxy for inbound OAuth-discovery handling.** If a future release adds a path-rewriter or canned-response option for the well-known URLs, the Caddy shim could be retired in favor of in-proxy handling. Not blocking; the Caddy layer is small and stable.
 
-- [ ] **Residual fragility: mcp-proxy does not respawn (or notice) a dead stdio child.** The idle-exit fix removes the only *observed* cause of child death, but if the child ever dies for another reason (crash, OOM), mcp-proxy keeps serving `initialize` while `tools/list` fails silently — the same `MCP error 0` symptom, no service crash to trigger `Restart=on-failure`. Not building a healthcheck/watchdog now (conservative scope; trigger eliminated), but if `MCP error 0` ever reappears without an idle-exit log line, the fix is a periodic `tools/list` probe (systemd timer) that restarts mempalace on failure. Upstream candidate: mcp-proxy child-supervision/respawn.
+- [x] **Residual fragility: mcp-proxy does not respawn (or notice) a dead stdio child.** The idle-exit fix removes the only *observed* cause of child death, but if the child ever dies for another reason (crash, OOM), mcp-proxy keeps serving `initialize` while `tools/list` fails silently — the same `MCP error 0` symptom, no service crash to trigger `Restart=on-failure`. Not building a healthcheck/watchdog now (conservative scope; trigger eliminated), but if `MCP error 0` ever reappears without an idle-exit log line, the fix is a periodic `tools/list` probe (systemd timer) that restarts mempalace on failure. Upstream candidate: mcp-proxy child-supervision/respawn.
 
 ## Possible improvements
 

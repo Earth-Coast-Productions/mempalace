@@ -1,0 +1,53 @@
+#!/usr/bin/env bash
+# mempalace-healthcheck — probe the LAN gateway with a REAL MCP handshake and self-heal.
+#
+# Why a real handshake (not curl): every mempalace outage class (SSE-gateway degradation,
+# dead/wedged stdio child, session-404) still returns HTTP 200 on GET /sse — only a full
+# initialize + tools/list + a tool CALL through :8111 (Caddy) reproduces the failure.
+#
+# On failure it escalates: restart mempalace -> reprobe -> restart caddy -> reprobe ->
+# alert (syslog always; Discord if CCD_DISCORD_WEBHOOK_URL is set). Caddy on this host
+# fronts ONLY mempalace, so restarting it has no collateral.
+set -uo pipefail
+VENV=/opt/mempalace/venv
+URL="${MEMPALACE_HC_URL:-http://192.168.33.10:8111/sse}"
+MIN_TOOLS="${MEMPALACE_HC_MIN_TOOLS:-25}"
+WEBHOOK_URL="${CCD_DISCORD_WEBHOOK_URL:-}"
+
+probe() {
+  timeout 25 "$VENV/bin/python" - "$URL" "$MIN_TOOLS" <<'PY'
+import asyncio, sys
+from mcp.client.sse import sse_client
+from mcp import ClientSession
+url, mint = sys.argv[1], int(sys.argv[2])
+async def main():
+    async with sse_client(url) as (r, w):
+        async with ClientSession(r, w) as s:
+            await s.initialize()
+            t = await s.list_tools()
+            await s.call_tool("mempalace_status", {})   # POST /messages — catches session-404
+            return 0 if len(t.tools) >= mint else 3
+try:
+    sys.exit(asyncio.run(main()))
+except SystemExit:
+    raise
+except Exception as e:
+    print(f"{type(e).__name__}: {str(e)[:140]}", file=sys.stderr); sys.exit(1)
+PY
+}
+
+alert() {
+  logger -t mempalace-healthcheck "$1"
+  [ -n "$WEBHOOK_URL" ] && curl -s --max-time 5 -H 'Content-Type: application/json' \
+    -d "{\"content\":\"🧠 mempalace-healthcheck: $1\"}" "$WEBHOOK_URL" >/dev/null 2>&1 || true
+}
+
+probe && exit 0
+logger -t mempalace-healthcheck "probe FAILED via $URL — restarting mempalace"
+systemctl restart mempalace.service; sleep 6
+if probe; then alert "recovered after mempalace restart"; exit 0; fi
+logger -t mempalace-healthcheck "still failing — restarting caddy (mempalace-only front)"
+systemctl restart caddy.service; sleep 4
+if probe; then alert "recovered after caddy restart"; exit 0; fi
+alert "UNRECOVERED after mempalace+caddy restart — needs a human"
+exit 1
