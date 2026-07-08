@@ -129,6 +129,18 @@ cd /tmp/pristine/mempalace && patch -p1 --dry-run < /root/mempalace/patches/NNNN
 
 When upstream merges the fix in version X, the auto-update will halt with "patch does not apply cleanly". Delete the `.patch` file, commit, then re-run the script.
 
+## Healthcheck watchdog (self-heal)
+
+`systemd/mempalace-healthcheck.{service,timer}` + `scripts/mempalace-healthcheck` run every 3 minutes. The probe is a **real MCP handshake through the LAN gateway** (`initialize` + `tools/list` + a `mempalace_status` call over `:8111`) — the only check that reproduces the failure classes, since all of them (dead/wedged child, SSE-gateway degradation, session-404) still return HTTP 200 on `GET /sse`, so a curl/HTTP check is blind. On failure it escalates: restart `mempalace` → reprobe → restart `caddy` → reprobe → alert (syslog tag `mempalace-healthcheck`, plus Discord if `CCD_DISCORD_WEBHOOK_URL` is set via `/etc/ecp/cc-watchdog.env`). Caddy on this host fronts **only** mempalace, so restarting it is collateral-free. Failure-injection tested 2026-07-07 (stopped service recovered in ~9s). This is the periodic-probe watchdog the idle-exit post-mortem flagged as the durable fix for "mcp-proxy doesn't notice a dead/wedged child."
+
+### Failure mode: Caddy gateway degradation (2026-07-07)
+
+When the mempalace child restarts, Caddy's stale keepalive upstream to `mcp-proxy:8112` can start serving the SSE stream with an **empty `Content-Type`** — LAN clients get `GET /sse` 200 but the follow-up `POST /messages/?session_id=…` returns `404 Could not find session`. The engine is fine (direct probe to `:8112` works, data intact); the fix is `systemctl restart caddy`. Isolate gateway-vs-engine with a real MCP handshake direct to `:8112` vs through `:8111`. The healthcheck watchdog now auto-recovers this within one tick.
+
+## Potential future direction: Hindsight
+
+Raised 2026-07-07 after repeated delivery-stack outages. [Hindsight](https://github.com/vectorize-io/hindsight) (vectorize-io, 18k★, MIT, active) is a stronger memory *engine* — hybrid vector+graph+temporal+BM25 retrieval, self-hostable with embedded Postgres. It is **not** a drop-in: no MCP server (REST/SDK/CLI/LLM-wrapper only → needs an MCP↔Hindsight shim or a paradigm change), it uses an LLM for memory extraction (keep on-LAN with Ollama), and its World/Experiences/Mental-Models model doesn't map 1:1 to the palace/KG/diary model. Tracked as a **possible improvement, not a committed migration** — the healthcheck watchdog removed the urgency. See `TODO.md`.
+
 ## Related
 
 - Upstream: https://github.com/MemPalace/mempalace
