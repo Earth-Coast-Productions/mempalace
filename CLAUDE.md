@@ -57,6 +57,15 @@ diff -q configs/etc/cron.d/mempalace-auto-update /etc/cron.d/mempalace-auto-upda
 
 Restarting `mempalace.service` breaks long-lived MCP sessions on every other VM with JSON-RPC `-32602` until each client runs `/mcp` to reconnect — the stale SSE session survives the restart but never re-sends the MCP `initialize` handshake. **Always warn on Signal before restarting**, and remind operators to run `/mcp` afterwards. Reloading Caddy (`systemctl reload caddy`) does NOT have this side effect — it's hot-swappable.
 
+## When the palace looks down (self-heal + manual fix)
+
+A `mempalace-healthcheck.timer` (every 3 min) probes a real MCP handshake through `:8111` and auto-heals: restart mempalace -> restart caddy -> alert. Most outages now self-recover within one tick. Diagnosing manually:
+
+- **Isolate gateway vs engine** with a real handshake (NOT curl — `GET /sse` is 200 in every failure mode): probe direct to `mcp-proxy` (`:8112`) vs through Caddy (`:8111`).
+- `404 Could not find session` / empty SSE `Content-Type` through `:8111` while `:8112` works = **Caddy gateway degraded** -> `systemctl restart caddy` (Caddy here fronts only mempalace). Caused the 2026-07-07 multi-day outage.
+- After any fix, a stale client keeps 404ing until it reconnects (`/mcp` or a fresh session).
+- Full post-mortem + watchdog: `README.md`, `TODO.md`, `/opt/standards/DEBUGGING.md`.
+
 ## Adding a patch
 
 Patches in `patches/` are unified diffs applied on top of each pip-installed mempalace version. Reapplication lives in one place — `scripts/mempalace-apply-patches` (installed to `/usr/local/bin/`) — with two callers: the auto-update script after each `pip install --upgrade`, and the `mempalace.service` `ExecStartPre` (`+`-prefixed, runs as root) so **every** service start reapplies first. That closes the gap where a manual restart after a stray `pip` reinstall could start an unpatched server — a non-zero exit from the reapply aborts startup on purpose (service-down is recoverable; an unpatched server bricks every client that connects). The reapply:
