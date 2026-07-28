@@ -16,16 +16,20 @@ Deployment configs for the MemPalace MCP server running on ecp-server (192.168.3
 
 ## Git workflow
 
-Forgejo first, GitHub mirror second. Always verify both refs match after pushing:
+Push to Forgejo. Forgejo push-mirrors to GitHub itself, within seconds:
 
 ```bash
 git push origin main
-git push github main
 git ls-remote origin refs/heads/main
-git ls-remote github refs/heads/main
 ```
 
-The github remote uses a per-repo SSH alias (`github.com-mempalace`) — see `~/.ssh/config`.
+⚠ **Retired 2026-07-27: no second push, and no `github` remote.** A push mirror pushes **all refs
+and prunes**, so a hand push to GitHub that Forgejo lacks is force-overwritten at the next sync.
+This repo's `github` remote, the `github.com-mempalace` alias and its deploy key were removed and
+**shredded** on 2026-07-27. See `/opt/standards/ENVIRONMENT.md` §"GitHub Mirroring".
+
+⚠ **`mempalace` is public on GitHub** while private in Forgejo — pre-existing, unchanged by the
+migration, but know it before committing anything sensitive here.
 
 ## Deploying a change
 

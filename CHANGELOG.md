@@ -17,6 +17,14 @@ Entries below were derived from this repo's git history. The repo is small
 
 ## [Unreleased]
 
+### Changed
+
+- **Git workflow: dual-push retired.** `CLAUDE.md` §Git workflow now shows a single push to
+  `origin`; Forgejo push-mirrors to GitHub itself. The `github` remote, the `github.com-mempalace`
+  alias and its deploy key (`SHA256:XaiaUlj7p23f62DJlS355tfCv6lWm3AlByqrOQF4584`) were removed and
+  **shredded** on `.10`. Also records that **this repo is public on GitHub** while private in
+  Forgejo — pre-existing, but worth knowing before committing anything sensitive.
+
 Open follow-ups are tracked in `TODO.md`.
 
 ## 2026-07-08
