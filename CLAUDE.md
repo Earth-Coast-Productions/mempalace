@@ -1,3 +1,5 @@
+Log mistakes in MISTAKES.md (what happened, root cause, prevention).
+
 # mempalace — Claude session instructions
 
 Deployment configs for the MemPalace MCP server running on ecp-server (192.168.33.10).
