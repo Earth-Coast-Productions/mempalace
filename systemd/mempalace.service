@@ -12,10 +12,14 @@ WorkingDirectory=/opt/mempalace/data
 # (HTTP 400), bricking every client that connects. A non-zero exit aborts
 # startup on purpose: service-down is recoverable, brick-on-connect is not.
 ExecStartPre=+/usr/local/bin/mempalace-apply-patches
+# --allowed-host (mcp-proxy >= 0.13.3): it now 421s any Host/Origin not allow-listed, and Caddy
+# forwards the client Host (192.168.33.10:8111) unchanged — without this every LAN client is refused.
+# The flag ADDS to the loopback defaults (direct :8112 probes keep working). Proven 2026-11-20.
 ExecStart=/opt/mempalace/venv/bin/mcp-proxy \
     --host=127.0.0.1 \
     --port=8112 \
     --pass-environment \
+    --allowed-host=192.168.33.10:8111 \
     -- /opt/mempalace/venv/bin/python -m mempalace.mcp_server \
        --palace /opt/mempalace/data/palace
 Restart=on-failure

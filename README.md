@@ -22,7 +22,7 @@ The mempalace package itself is installed from PyPI into a venv at `/opt/mempala
 | Component | Bind | Purpose |
 |---|---|---|
 | Caddy (`/etc/caddy/Caddyfile`) | `192.168.33.10:8111` | OAuth-probe shim + reverse proxy |
-| mcp-proxy 0.12.0 (`/opt/mempalace/venv/bin/mcp-proxy`) | `127.0.0.1:8112` | SSE ↔ stdio bridge for the MCP server |
+| mcp-proxy 0.15.0 (`/opt/mempalace/venv/bin/mcp-proxy`, `--allowed-host=192.168.33.10:8111`) | `127.0.0.1:8112` | SSE ↔ stdio bridge for the MCP server |
 | mempalace server | stdio (child of mcp-proxy) | The actual MCP tool implementation |
 
 Clients connect to `http://192.168.33.10:8111/sse` exactly as before — the shim is transparent to them.

@@ -18,6 +18,18 @@ Entries below were derived from this repo's git history. The repo is small
 ## [Unreleased]
 
 ### Changed
+- **2026-11-20 — mcp-proxy 0.12.0 → 0.15.0** (mempalace 3.12.0 was already the latest on PyPI).
+  Picks up the 0.13.1/0.13.2 security releases (cryptography 50, PyJWT 2.15, Starlette 1.10, certifi
+  dropping the compromised emSign ECC root). Upgraded in place with pip's default only-if-needed strategy:
+  12 packages moved (mcp 1.27→1.30 and the HTTP stack); **chromadb, numpy and onnxruntime untouched**, so
+  the palace's on-disk format did not change. ⚠ **0.13.3 added Host/Origin validation**: behind Caddy, which
+  forwards `Host: 192.168.33.10:8111`, an un-flagged 0.15 returns **421 Misdirected Request** to every LAN
+  client. The unit now passes `--allowed-host=192.168.33.10:8111` (adds to the loopback defaults). Rehearsed
+  on a palace copy first (hazard reproduced without the flag, fixed with it, foreign Host still 421), then
+  verified live: real handshake through :8111 and :8112, OAuth shim JSON 404s, healthcheck green, and a
+  fresh headless Claude Code `mempalace_status` = 5207 drawers. ⚠ Clients connected before the restart keep
+  getting `404 Could not find session` until `/mcp` reconnect. Rollback: `/var/backups/mempalace-20261120-mcp-proxy-0.15/`
+  (pip freeze + old unit — restore BOTH; 0.12 rejects `--allowed-host`) and ZFS `storage01/mempalace@pre-mcp-proxy-0.15`.
 
 - **Git workflow: dual-push retired.** `CLAUDE.md` §Git workflow now shows a single push to
   `origin`; Forgejo push-mirrors to GitHub itself. The `github` remote, the `github.com-mempalace`
